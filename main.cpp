@@ -27,7 +27,7 @@ struct complex_plane {
     long double im_range[2];
 };
 
-int max_iter = 50;
+unsigned long max_iter = 100;
 
 complex_plane get_plane(long double re_inf, long double re_sup, long double im_inf, long double im_sup)
 {
@@ -56,7 +56,13 @@ int main(int argc, char **argv)
     long double mouse_pos_plane_x;
     long double mouse_pos_plane_y;
 
-    SDL_Window *win = SDL_CreateWindow("Mandelbrot", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, x_size, y_size, SDL_WINDOW_OPENGL);
+    SDL_Window *win = SDL_CreateWindow("Mandelbrot",
+                                       SDL_WINDOWPOS_UNDEFINED,
+                                       SDL_WINDOWPOS_UNDEFINED,
+                                       x_size,
+                                       y_size,
+                                       SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN);
+                                       // SDL_WINDOW_OPENGL);
     SDL_Renderer *renderer = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
     SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB888, SDL_TEXTUREACCESS_TARGET, x_size, y_size);
 
@@ -126,19 +132,30 @@ int main(int argc, char **argv)
 
             if (evt.key.keysym.sym == SDLK_KP_PLUS)
             {
-                plane.re_range[0] = plane.re_range[0] + abs(plane.re_range[0] - plane.re_range[1]) / 4;
-                plane.re_range[1] = plane.re_range[1] - abs(plane.re_range[0] - plane.re_range[1]) / 4;
-                plane.im_range[0] = plane.im_range[0] + abs(plane.im_range[0] - plane.im_range[1]) / 4;
-                plane.im_range[1] = plane.im_range[1] - abs(plane.im_range[0] - plane.im_range[1]) / 4;
-                max_iter *= 1.1;
+                plane.re_range[0] = plane.re_range[0] + abs(plane.re_range[0] - plane.re_range[1]) / 8.0;
+                plane.re_range[1] = plane.re_range[1] - abs(plane.re_range[0] - plane.re_range[1]) / 8.0;
+                plane.im_range[0] = plane.im_range[0] + abs(plane.im_range[0] - plane.im_range[1]) / 8.0;
+                plane.im_range[1] = plane.im_range[1] - abs(plane.im_range[0] - plane.im_range[1]) / 8.0;
+                // max_iter += 128;
             }
             else if (evt.key.keysym.sym == SDLK_KP_MINUS)
             {
-                plane.re_range[0] = plane.re_range[0] - abs(plane.re_range[0] - plane.re_range[1]) / 4;
-                plane.re_range[1] = plane.re_range[1] + abs(plane.re_range[0] - plane.re_range[1]) / 4;
-                plane.im_range[0] = plane.im_range[0] - abs(plane.im_range[0] - plane.im_range[1]) / 4;
-                plane.im_range[1] = plane.im_range[1] + abs(plane.im_range[0] - plane.im_range[1]) / 4;
-                max_iter /= 1.1;
+                plane.re_range[0] = plane.re_range[0] - abs(plane.re_range[0] - plane.re_range[1]) / 8;
+                plane.re_range[1] = plane.re_range[1] + abs(plane.re_range[0] - plane.re_range[1]) / 8;
+                plane.im_range[0] = plane.im_range[0] - abs(plane.im_range[0] - plane.im_range[1]) / 8;
+                plane.im_range[1] = plane.im_range[1] + abs(plane.im_range[0] - plane.im_range[1]) / 8;
+                // max_iter -= 128;
+            } else if (evt.key.keysym.sym == SDLK_s) {
+                printf("re_step: %.30f\n", re_step);
+                printf("im_step: %.30f\n", im_step);
+            } else if (evt.key.keysym.sym == SDLK_j) {
+                max_iter += 100;
+                printf("max_iter: %u\n", max_iter);
+            } else if (evt.key.keysym.sym == SDLK_k) {
+                max_iter -= 100;
+            } else if (evt.key.keysym.sym == SDLK_q) {
+                SDL_Quit();
+                exit(0);
             }
             break;
         }
@@ -152,32 +169,32 @@ int main(int argc, char **argv)
         long double start_x = plane.re_range[0];
         long double start_y = plane.im_range[0];
 
-        int i = 0;
+        unsigned long int i = 0;
         auto s_mandel_time = std::chrono::steady_clock::now();
-        // #pragma omp parallel for
+#pragma omp parallel for
         for (int x = 0; x < x_size; ++x)
         {
             for (int y = 0; y < y_size; ++y)
             {
-                std::complex<long double> test_c(start_x + x * re_step, start_y + y * im_step);
                 std::complex<long double> tmp(0.0, 0.0);
+                std::complex<long double> test_c(start_x + (long double)x * re_step, start_y + (long double)y * im_step);
                 for (i = 0; i < max_iter; ++i)
                 {
                     tmp = f_c(tmp, test_c);
                     // abs is very slow but safer
                     // magnitude = abs(tmp);
-                    magnitude = sqrt(tmp.real() * tmp.real() + tmp.imag() * tmp.imag());
+                    magnitude = tmp.real() * tmp.real() + tmp.imag() * tmp.imag();
                     // std::cout << "magnitude: " << magnitude << std::endl;
 
-                    if (magnitude >= 2)
+                    if (magnitude >= 4)
                         break;
                 }
                 mandel[x][y] = i;
             }
         }
 
-        auto mandel_time = (std::chrono::steady_clock::now() - s_mandel_time);
-        std::cout << "mandel_time: " << std::chrono::duration_cast<std::chrono::milliseconds>(mandel_time).count() << "\n";
+        // auto mandel_time = (std::chrono::steady_clock::now() - s_mandel_time);
+        // std::cout << "mandel_time: " << std::chrono::duration_cast<std::chrono::milliseconds>(mandel_time).count() << "\n";
 
         Uint32 format = SDL_GetWindowPixelFormat(win);
         SDL_PixelFormat *mapping_format = SDL_AllocFormat(format);
@@ -197,9 +214,13 @@ int main(int argc, char **argv)
                 else
                 {
                     pixels[(j * x_size) + i] = SDL_MapRGB(mapping_format,
-                                                          200 * cos(iter),
-                                                          250 * sin(iter),
-                                                          128 * cos(iter));
+                                                          200 * cos(log(iter)),
+                                                          250 * sin(log(iter)),
+                                                          128 * cos(1.0 - log(iter)));
+                    // pixels[(j * x_size) + i] = SDL_MapRGB(mapping_format,
+                    //                                       255 * iter / max_iter,
+                    //                                       100 * iter / max_iter,
+                    //                                       50 * iter / max_iter);
                 }
             }
         }
